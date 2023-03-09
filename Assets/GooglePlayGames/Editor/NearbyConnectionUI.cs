@@ -20,7 +20,7 @@ namespace GooglePlayGames.Editor
 {
     using UnityEngine;
     using UnityEditor;
-
+    
     public class NearbyConnectionUI : EditorWindow
     {
         private string mNearbyServiceId = string.Empty;
