@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using System.IO;
 
 public class GameManager : MonoBehaviour
 {
@@ -263,6 +264,8 @@ public class GameManager : MonoBehaviour
         level = PlayerPrefs.GetInt("level",0) + 1;
         difficulty = PlayerPrefs.GetInt("difficulty",0);
 
+
+
         audioCtrl = AudioCtrl.Instance;
 
         isMenu = false;
@@ -279,64 +282,115 @@ public class GameManager : MonoBehaviour
         pos.y = level * y;
         hexagonCount = 0;
 
-        Color first, second, third;
-        for (int i = 0; i < 1 + level * 2; i++)
-        {
-            pos.x = -x / 2.0f * (hexaCount - 1);
 
-            for (int j = 0; j < hexaCount; j++)
+        Serializer serializer = GetComponent<Serializer>();     //load
+        FileInfo fileInfo = new FileInfo(Path.Combine(Application.persistentDataPath, "GameData.dat"));
+        GameData gameData=null;
+        if (fileInfo.Exists)
+        {
+            serializer.DeSerialization("GameData", Application.persistentDataPath, out gameData); 
+        }
+        if (gameData!=null&& gameData.level == level && gameData.difficulty == difficulty)      //load game
+        {
+            Debug.Log("load");
+            for (int i = 0; i < 1 + level * 2; i++)
             {
-                hexagons[i, j] = Instantiate(hexagon, pos, Quaternion.identity).GetComponent<HexagonCtrl>();
-                hexagons[i, j].pos = pos;
-                if (i == 0)
+                pos.x = -x / 2.0f * (hexaCount - 1);
+
+                for (int j = 0; j < hexaCount; j++)
                 {
-                    if (j == 0)
+                    HexagonData hexagonData = gameData.hexagonDatas[0];
+                    gameData.hexagonDatas.RemoveAt(0);
+
+                    hexagons[i, j] = Instantiate(hexagon, pos, Quaternion.identity).GetComponent<HexagonCtrl>();
+                    hexagons[i, j].pos = pos;
+
+                    hexagons[i, j].SetColor(hexagonData.GetColor(0), hexagonData.GetColor(1), hexagonData.GetColor(2));
+                    hexagons[i, j].y = i;
+                    hexagons[i, j].x = j;
+                    pos.x += x;
+                    hexagonCount++;
+                }
+                if (i < level) hexaCount++;
+                else hexaCount--;
+
+                pos.y -= y;
+            }
+
+        }
+        else
+        {           // new game
+            Debug.Log("new");
+            gameData = new GameData();
+            gameData.level = level;
+            gameData.difficulty = difficulty;
+
+            Color first, second, third;
+            for (int i = 0; i < 1 + level * 2; i++)
+            {
+                pos.x = -x / 2.0f * (hexaCount - 1);
+
+                for (int j = 0; j < hexaCount; j++)
+                {
+                    hexagons[i, j] = Instantiate(hexagon, pos, Quaternion.identity).GetComponent<HexagonCtrl>();
+                    hexagons[i, j].pos = pos;
+                    if (i == 0)
                     {
+                        if (j == 0)
+                        {
+                            third = ColorArray[Random.Range(0, colorCount)];
+                        }
+                        else
+                        {
+                            third = hexagons[i, j - 1].colors[1];
+                        }
+                        second = ColorArray[Random.Range(0, colorCount)];
+                        first = ColorArray[Random.Range(0, colorCount)];
+                    }
+                    else if (j == 0)
+                    {
+                        if (i <= level)
+                        {
+                            first = hexagons[i - 1, j].colors[2];
+                        }
+                        else
+                        {
+                            first = hexagons[i - 1, j].colors[1];
+                        }
+                        second = ColorArray[Random.Range(0, colorCount)];
                         third = ColorArray[Random.Range(0, colorCount)];
                     }
                     else
                     {
+                        if (i <= level)
+                        {
+                            first = hexagons[i - 1, j - 1].colors[1];
+                        }
+                        else
+                        {
+                            first = hexagons[i - 1, j].colors[1];
+                        }
+                        second = ColorArray[Random.Range(0, colorCount)];
                         third = hexagons[i, j - 1].colors[1];
                     }
-                    second = ColorArray[Random.Range(0, colorCount)];
-                    first = ColorArray[Random.Range(0, colorCount)];
+                    hexagons[i, j].SetColor(first, second, third);
+                    HexagonData hexagonData = new HexagonData(first, second, third);
+                    gameData.hexagonDatas.Add(hexagonData);
+                    hexagons[i, j].y = i;
+                    hexagons[i, j].x = j;
+                    pos.x += x;
+                    hexagonCount++;
                 }
-                else if (j == 0)
-                {
-                    if (i <= level)
-                    {
-                        first = hexagons[i - 1, j].colors[2];
-                    }
-                    else
-                    {
-                        first = hexagons[i - 1, j].colors[1];
-                    }
-                    second = ColorArray[Random.Range(0, colorCount)];
-                    third = ColorArray[Random.Range(0, colorCount)];
-                }
-                else
-                {
-                    if (i <= level)
-                    {
-                        first = hexagons[i - 1, j - 1].colors[1];
-                    }
-                    else
-                    {
-                        first = hexagons[i - 1, j].colors[1];
-                    }
-                    second = ColorArray[Random.Range(0, colorCount)];
-                    third = hexagons[i, j - 1].colors[1];
-                }
-                hexagons[i, j].SetColor(first, second, third);
-                hexagons[i, j].y = i;
-                hexagons[i, j].x = j;
-                pos.x += x;
-                hexagonCount++;
-            }
-            if (i < level) hexaCount++;
-            else hexaCount--;
+                if (i < level) hexaCount++;
+                else hexaCount--;
 
-            pos.y -= y;
+                pos.y -= y;
+            }
+
+            //save game
+            serializer.Serialization(gameData, "GameData", Application.persistentDataPath);
+
+
         }
 
         hexaCount = 2 + (level - 1);
@@ -359,13 +413,15 @@ public class GameManager : MonoBehaviour
                 temp = hexagons[tempY, tempX].x;
                 hexagons[tempY, tempX].x = hexagons[i, j].x;
                 hexagons[i, j].x = temp;
-                Vector3 tempVec3 = hexagons[i,j].pos;
-                hexagons[i,j].pos = hexagons[tempY,tempX].pos;
+                Vector3 tempVec3 = hexagons[i, j].pos;
+                hexagons[i, j].pos = hexagons[tempY, tempX].pos;
                 hexagons[tempY, tempX].pos = tempVec3;
             }
             if (i < level) hexaCount++;
             else hexaCount--;
         }
+
+
 
         Vector3 tempPos = hexagons[level, level].transform.position;
         Destroy(hexagons[level, level].gameObject);
